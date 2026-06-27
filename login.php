@@ -72,6 +72,7 @@ $parent_has_students = $selected_role === 'parent' && !empty($students);
                     </div>
                     <form action="index.php?action=verify_otp" method="POST" class="space-y-5 text-xs">
                         <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
+                        <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
                         <?php if ($selected_role === 'parent' && $selected_student): ?>
                             <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-[11px] text-slate-600 dark:text-slate-300">
                                 <p class="font-semibold text-slate-900 dark:text-white">Parent portal verification for:</p>
@@ -97,6 +98,7 @@ $parent_has_students = $selected_role === 'parent' && !empty($students);
                     </form>
                     <form action="index.php?action=resend_otp" method="POST" class="pt-4 border-t border-slate-200 dark:border-slate-800">
                         <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
+                        <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
                         <button
                             type="submit"
                             id="resend-btn"
@@ -140,12 +142,35 @@ $parent_has_students = $selected_role === 'parent' && !empty($students);
                     <div class="flex items-center justify-between mb-6">
                         <div>
                             <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Verify your email for <?php echo h($role_label); ?></h2>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">We will send a temporary login code to your address.</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">We will send a temporary login code to your email email address.</p>
                         </div>
                         <span class="text-[12px] uppercase font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-3 py-1 rounded-full tracking-wider"><?php echo h($role_label); ?></span>
                     </div>
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">New here?</h3>
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400">Create a portal account first, then request your verification code.</p>
+                            </div>
+                        </div>
+                        <form action="index.php?action=register_account" method="POST" class="space-y-3 text-xs">
+                            <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
+                            <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                            <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Full Name</label>
+                            <input type="text" name="name" required placeholder="Your full name" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none" />
+                            <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Email Address</label>
+                            <input type="email" name="email" required placeholder="you@institution.edu" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none" />
+                            <?php if ($selected_role === 'student'): ?>
+                                <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Roll Number</label>
+                                <input type="text" name="roll_no" required placeholder="e.g. 24CS001" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none" />
+                            <?php endif; ?>
+                            <button type="submit" class="w-full bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-extrabold py-2.5 rounded-2xl">Register Account</button>
+                        </form>
+                    </div>
+
                     <form action="index.php?action=request_otp" method="POST" class="space-y-5 text-xs">
                         <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
+                        <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
                         <?php if ($selected_role === 'parent'): ?>
                             <?php if ($parent_has_students): ?>
                                 <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Select Student Account</label>
@@ -159,7 +184,7 @@ $parent_has_students = $selected_role === 'parent' && !empty($students);
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="text-[10px] text-slate-500 dark:text-slate-400">The chosen student’s registered email will receive the verification code.</p>
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400">The selected student’s registered email address will receive the verification code.</p>
                             <?php else: ?>
                                 <div class="p-5 rounded-3xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
                                     No student records are available yet. Add a student record first before using the parent portal.
@@ -175,7 +200,7 @@ $parent_has_students = $selected_role === 'parent' && !empty($students);
                                 placeholder="e.g. you@institution.edu"
                                 class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none"
                             />
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400">Your verification code will be sent to your registered email address.</p>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400">Your verification code will be sent to the email address linked to your account.</p>
                         <?php endif; ?>
                         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-3 rounded-2xl">Send Verification Code</button>
                     </form>
