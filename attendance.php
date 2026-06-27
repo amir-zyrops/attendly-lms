@@ -52,7 +52,7 @@ $enrolled_students = array_filter($students, function($st) use ($active_course) 
     </div>
 
     <!-- Active Class Card Header -->
-    <div class="bg-gradient-to-r from-blue-650 to-indigo-700 text-white rounded-3xl p-6 shadow-xl space-y-4">
+    <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-3xl p-6 shadow-xl space-y-4">
         <div class="flex justify-between items-start">
             <div class="space-y-1">
                 <span class="text-[10px] font-extrabold text-blue-200 bg-white/10 border border-white/15 px-3 py-0.5 rounded font-mono uppercase tracking-wider">
@@ -86,9 +86,9 @@ $enrolled_students = array_filter($students, function($st) use ($active_course) 
     <!-- Interactive Interactive Attendance List -->
     <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-5">
         
-        <div class="pb-3 border-b border-slate-100 dark:border-slate-850 flex justify-between items-center flex-wrap gap-2">
+        <div class="pb-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center flex-wrap gap-2">
             <div>
-                <h3 class="font-bold text-slate-850 dark:text-white text-sm">Attendance List Roll Sheet</h3>
+                <h3 class="font-bold text-slate-800 dark:text-white text-sm">Attendance List Roll Sheet</h3>
                 <p class="text-[11px] text-slate-500 font-medium">Verify credentials and check state for today's session roster.</p>
             </div>
             <div class="flex gap-2 text-[10px] font-mono">
@@ -104,7 +104,7 @@ $enrolled_students = array_filter($students, function($st) use ($active_course) 
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-850">
+                        <tr class="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-800">
                             <th class="py-3 px-3">Student Name</th>
                             <th class="py-3 px-3">Roll Number ID</th>
                             <th class="py-3 px-3">Sec Attendance Avg</th>
@@ -118,7 +118,7 @@ $enrolled_students = array_filter($students, function($st) use ($active_course) 
                         </tr>
                         <?php else: ?>
                         <?php foreach ($enrolled_students as $st): ?>
-                        <tr class="border-b border-slate-50 dark:border-slate-850 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-colors">
+                        <tr class="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-colors">
                             <td class="py-3 px-3">
                                 <div class="flex items-center gap-2.5">
                                     <?php echo avatar_markup($st, 'w-8 h-8 rounded-full border'); ?>
@@ -169,7 +169,7 @@ $enrolled_students = array_filter($students, function($st) use ($active_course) 
             </div>
 
             <!-- Verification Action trigger -->
-            <div class="pt-4 border-t border-slate-100 dark:border-slate-850 flex justify-between items-center">
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <span class="text-[11px] text-slate-450 font-medium">Clicking button locks the session roll ledger. Reports cannot be modified dynamically without Admin override credentials.</span>
                 <button
                     type="submit"
