@@ -15,18 +15,92 @@ if (isset($_GET['action'])) {
 
     if ($action === 'login') {
         $role = isset($_POST['role']) ? $_POST['role'] : 'student';
-        $users = get_table(USERS_FILE);
-        $login_user = isset($users[$role]) ? $users[$role] : null;
+        trigger_toast('Please use the email verification flow to sign in.');
+        header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+        exit;
+    }
 
-        if ($login_user && !empty($login_user['email'])) {
-            $_SESSION['user'] = $login_user;
-            $_SESSION['user']['role'] = $role;
-            $label = display_name($_SESSION['user']);
-            add_log("{$label} signed in to the " . role_display_name($role) . " portal.");
-            trigger_toast("Sign-in successful. Active role: " . role_display_name($role));
-            header('Location: index.php?page=dashboard');
+    $csrf_required_actions = ['register_account', 'request_otp', 'verify_otp', 'resend_otp', 'flush_database', 'manage_account', 'clear_reports', 'clear_logs'];
+    if (in_array($action, $csrf_required_actions, true) && (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token']))) {
+        trigger_toast('Security token missing or invalid. Please refresh the page and try again.');
+        header('Location: index.php?page=login');
+        exit;
+    }
+
+    if ($action === 'register_account') {
+        $role = isset($_POST['role']) ? $_POST['role'] : '';
+        $name = isset($_POST['name']) ? trim($_POST['name']) : '';
+        $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+        $roll_no = isset($_POST['roll_no']) ? trim($_POST['roll_no']) : '';
+
+        if (!in_array($role, ['admin', 'faculty', 'student', 'parent'], true)) {
+            trigger_toast('Please choose a valid portal before registering.');
+            header('Location: index.php?page=login');
             exit;
         }
+
+        if ($name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            trigger_toast('Please provide your full name and a valid email address.');
+            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+            exit;
+        }
+
+        if (!is_public_registration_allowed()) {
+            trigger_toast('Self-registration is currently disabled. Please contact an administrator to create your account.');
+            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+            exit;
+        }
+
+        if (!is_email_domain_allowed($email)) {
+            trigger_toast('Only approved institutional email addresses may register for this portal.');
+            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+            exit;
+        }
+
+        if (!rate_limit_check('register:' . get_client_ip(), 3, 600)) {
+            trigger_toast('Too many registration attempts. Please wait a few minutes and try again.');
+            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+            exit;
+        }
+
+        if ($role === 'student' && $roll_no === '') {
+            trigger_toast('Student accounts require a roll number.');
+            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+            exit;
+        }
+
+        $users = get_table(USERS_FILE);
+        $user_profile = isset($users[$role]) && is_array($users[$role]) ? $users[$role] : ['role' => $role];
+        $user_profile['role'] = $role;
+        $user_profile['name'] = $name;
+        $user_profile['email'] = $email;
+        $user_profile['avatar'] = $user_profile['avatar'] ?? '';
+        $user_profile['designation'] = $user_profile['designation'] ?? '';
+        $user_profile['department'] = $user_profile['department'] ?? '';
+        $user_profile['bio'] = $user_profile['bio'] ?? '';
+        $users[$role] = $user_profile;
+        save_table(USERS_FILE, $users);
+
+        if ($role === 'student') {
+            $student_profile = [
+                'rollNo' => $roll_no,
+                'name' => $name,
+                'email' => $email,
+                'role' => 'student',
+                'avatar' => '',
+                'department' => '',
+                'attendance' => 0.0,
+                'enrolledSections' => [],
+                'guardianName' => '',
+                'guardianEmail' => ''
+            ];
+            save_student_profile($student_profile);
+        }
+
+        add_log("Registered new {$role} account for {$name} ({$email}).");
+        trigger_toast('Account created successfully. You can now request your verification code.');
+        header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+        exit;
     }
 
     if ($action === 'request_otp') {
@@ -65,10 +139,16 @@ if (isset($_GET['action'])) {
             }
             $logged_in = find_user_by_email($email);
             if (!$logged_in || $logged_in['role'] !== $role) {
-                trigger_toast('Email does not match the selected portal. Choose the correct portal or email.');
+                trigger_toast('No matching account was found for that email. Register a new account first or use the correct portal email.');
                 header('Location: index.php?page=login&step=email&role=' . urlencode($role));
                 exit;
             }
+        }
+
+        if (!rate_limit_check('otp:' . strtolower($email), 3, 300)) {
+            trigger_toast('Too many verification attempts. Please wait a few minutes and try again.');
+            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+            exit;
         }
 
         $_SESSION['otp_role'] = $role;
@@ -79,7 +159,7 @@ if (isset($_GET['action'])) {
         $sent = send_otp_email($email, $_SESSION['otp_code']);
         add_log("OTP generated for {$role} and dispatched to {$email}.");
 
-        trigger_toast('Check your email for the verification code.');
+        trigger_toast('Please check your email for the verification code.');
 
         header('Location: index.php?page=login&step=verify&role=' . urlencode($role));
         exit;
@@ -108,6 +188,8 @@ if (isset($_GET['action'])) {
             header('Location: index.php?page=login');
             exit;
         }
+
+        session_regenerate_id(true);
 
         if ($role === 'student') {
             $student = find_student_by_email($email);
@@ -171,6 +253,172 @@ if (isset($_GET['action'])) {
         exit;
     }
 
+    if ($action === 'flush_database') {
+        require_login();
+        if (!isset($_SESSION['user']['role']) || $_SESSION['user']['role'] !== 'admin') {
+            trigger_toast('Only administrators can clear student and parent data.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+        unset($_SESSION['otp_code'], $_SESSION['otp_expires'], $_SESSION['otp_role'], $_SESSION['otp_email'], $_SESSION['otp_student_roll']);
+        reset_student_parent_data();
+        add_log('Administrator cleared student and parent records.');
+        trigger_toast('Student and parent data has been cleared.');
+        header('Location: index.php?page=dashboard');
+        exit;
+    }
+
+    if ($action === 'manage_account') {
+        require_login();
+        if (!isset($_SESSION['user']['role']) || $_SESSION['user']['role'] !== 'admin') {
+            trigger_toast('Only administrators can manage portal accounts.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+
+        $target = isset($_POST['account_target']) ? $_POST['account_target'] : '';
+        $mode = isset($_POST['account_action']) ? $_POST['account_action'] : '';
+        $users = get_table(USERS_FILE);
+
+        if ($target === 'faculty' && $mode === 'create') {
+            $name = isset($_POST['name']) ? trim($_POST['name']) : '';
+            $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+            if ($name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                trigger_toast('Please provide a name and a valid faculty email.');
+                header('Location: index.php?page=dashboard');
+                exit;
+            }
+            $users['faculty'] = [
+                'name' => $name,
+                'email' => $email,
+                'role' => 'faculty',
+                'avatar' => $users['faculty']['avatar'] ?? '',
+                'designation' => isset($_POST['designation']) ? trim($_POST['designation']) : ($users['faculty']['designation'] ?? ''),
+                'department' => isset($_POST['department']) ? trim($_POST['department']) : ($users['faculty']['department'] ?? ''),
+                'bio' => isset($_POST['bio']) ? trim($_POST['bio']) : ($users['faculty']['bio'] ?? '')
+            ];
+            save_table(USERS_FILE, $users);
+            add_log(display_name($users['faculty']) . ' was added as a faculty account by an administrator.');
+            trigger_toast('Faculty account saved successfully.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+
+        if ($target === 'faculty' && $mode === 'delete') {
+            $users['faculty'] = [
+                'name' => '',
+                'email' => '',
+                'role' => 'faculty',
+                'avatar' => '',
+                'designation' => '',
+                'department' => '',
+                'bio' => ''
+            ];
+            save_table(USERS_FILE, $users);
+            add_log('Faculty account was removed by an administrator.');
+            trigger_toast('Faculty account removed.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+
+        if ($target === 'student' && $mode === 'create') {
+            $name = isset($_POST['name']) ? trim($_POST['name']) : '';
+            $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+            $roll_no = isset($_POST['roll_no']) ? trim($_POST['roll_no']) : '';
+            if ($name === '' || $email === '' || $roll_no === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                trigger_toast('Please provide a name, valid student email, and roll number.');
+                header('Location: index.php?page=dashboard');
+                exit;
+            }
+            $users['student'] = [
+                'name' => $name,
+                'email' => $email,
+                'role' => 'student',
+                'avatar' => $users['student']['avatar'] ?? '',
+                'designation' => $users['student']['designation'] ?? '',
+                'department' => isset($_POST['department']) ? trim($_POST['department']) : ($users['student']['department'] ?? ''),
+                'bio' => $users['student']['bio'] ?? ''
+            ];
+            save_table(USERS_FILE, $users);
+            save_student_profile([
+                'rollNo' => $roll_no,
+                'name' => $name,
+                'email' => $email,
+                'role' => 'student',
+                'avatar' => '',
+                'department' => isset($_POST['department']) ? trim($_POST['department']) : '',
+                'attendance' => 0.0,
+                'enrolledSections' => [],
+                'guardianName' => '',
+                'guardianEmail' => ''
+            ]);
+            add_log(display_name($users['student']) . ' was added as a student account by an administrator.');
+            trigger_toast('Student account saved successfully.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+
+        if ($target === 'student' && $mode === 'delete') {
+            $roll_no = isset($_POST['roll_no']) ? trim($_POST['roll_no']) : '';
+            $users['student'] = [
+                'name' => '',
+                'email' => '',
+                'role' => 'student',
+                'avatar' => '',
+                'designation' => '',
+                'department' => '',
+                'bio' => ''
+            ];
+            save_table(USERS_FILE, $users);
+
+            $student_records = get_table(STUDENTS_FILE);
+            if ($roll_no !== '') {
+                $student_records = array_values(array_filter($student_records, function ($student) use ($roll_no) {
+                    return !isset($student['rollNo']) || $student['rollNo'] !== $roll_no;
+                }));
+            } else {
+                $student_records = [];
+            }
+            save_table(STUDENTS_FILE, $student_records);
+            add_log('Student account was removed by an administrator.');
+            trigger_toast('Student record removed.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+
+        trigger_toast('Please select a valid account action.');
+        header('Location: index.php?page=dashboard');
+        exit;
+    }
+
+    if ($action === 'clear_reports') {
+        require_login();
+        if (!isset($_SESSION['user']['role']) || $_SESSION['user']['role'] !== 'admin') {
+            trigger_toast('Only administrators can clear archived report generations.');
+            header('Location: index.php?page=reports');
+            exit;
+        }
+        save_table(REPORTS_FILE, []);
+        add_log(display_name(get_current_user_profile()) . ' cleared the archived report generations log.');
+        trigger_toast('Archived report generations were cleared.');
+        header('Location: index.php?page=reports');
+        exit;
+    }
+
+    if ($action === 'clear_logs') {
+        require_login();
+        if (!isset($_SESSION['user']['role']) || $_SESSION['user']['role'] !== 'admin') {
+            trigger_toast('Only administrators can clear system logs.');
+            header('Location: index.php?page=dashboard');
+            exit;
+        }
+        save_table(LOGS_FILE, []);
+        add_log(display_name(get_current_user_profile()) . ' cleared the system activity log.');
+        trigger_toast('System logs were cleared.');
+        header('Location: index.php?page=dashboard');
+        exit;
+    }
+
     // Submit Attendance (Faculty Role)
     if ($action === 'submit_attendance') {
         require_login();
@@ -209,7 +457,7 @@ if (isset($_GET['action'])) {
 
         $faculty_user = get_current_user_profile();
         add_log(display_name($faculty_user) . " submitted an attendance sheet for {$course_code}.");
-        trigger_toast("Attendance sheet compiled and locked into registrar log successfully!");
+        trigger_toast('Attendance sheet submitted successfully and recorded in the registrar log.');
         header('Location: index.php?page=dashboard');
         exit;
     }
@@ -265,8 +513,56 @@ if (isset($_GET['action'])) {
         $code = isset($_POST['code']) ? strtoupper(trim($_POST['code'])) : '';
         $title = isset($_POST['title']) ? trim($_POST['title']) : '';
         $coordinator = isset($_POST['coordinator']) ? trim($_POST['coordinator']) : '';
-        $schedule = isset($_POST['schedule']) ? trim($_POST['schedule']) : '';
-        $rooms = isset($_POST['rooms']) ? trim($_POST['rooms']) : '';
+        $schedule_slots = isset($_POST['schedule_slots']) && is_array($_POST['schedule_slots']) ? $_POST['schedule_slots'] : [];
+        $parsed_schedule_slots = [];
+        foreach ($schedule_slots as $slot) {
+            if (!is_array($slot)) {
+                continue;
+            }
+            $day = isset($slot['day']) ? trim((string) $slot['day']) : '';
+            $start = isset($slot['start']) ? trim((string) $slot['start']) : '';
+            $end = isset($slot['end']) ? trim((string) $slot['end']) : '';
+            $room = isset($slot['room']) ? trim((string) $slot['room']) : '';
+            if ($day === '' && $start === '' && $end === '' && $room === '') {
+                continue;
+            }
+            $parsed_schedule_slots[] = [
+                'day' => $day,
+                'start' => $start,
+                'end' => $end,
+                'room' => $room,
+            ];
+        }
+
+        $schedule = '';
+        $rooms = '';
+        if (!empty($parsed_schedule_slots)) {
+            $schedule_parts = [];
+            $room_parts = [];
+            foreach ($parsed_schedule_slots as $slot) {
+                $day = $slot['day'] ?? '';
+                $start = $slot['start'] ?? '';
+                $end = $slot['end'] ?? '';
+                $room = $slot['room'] ?? '';
+                $time = trim($start . ($start !== '' && $end !== '' ? ' - ' : '') . $end);
+                $entry = $day;
+                if ($time !== '') {
+                    $entry .= ' ' . $time;
+                }
+                if ($entry !== '') {
+                    $schedule_parts[] = $entry;
+                }
+                if ($room !== '') {
+                    $room_parts[] = $room;
+                }
+            }
+            $schedule = implode(' | ', $schedule_parts);
+            $rooms = implode(', ', array_values(array_unique($room_parts)));
+        } else {
+            $schedule = isset($_POST['schedule']) ? trim($_POST['schedule']) : '';
+            $rooms = isset($_POST['rooms']) ? trim($_POST['rooms']) : '';
+        }
+
         $total_hours = isset($_POST['total_hours']) ? intval($_POST['total_hours']) : 0;
         $enrolled_students = isset($_POST['enrolled_students']) ? (array) $_POST['enrolled_students'] : [];
         $original_code = isset($_POST['original_code']) ? strtoupper(trim($_POST['original_code'])) : '';
@@ -295,6 +591,7 @@ if (isset($_GET['action'])) {
                 'coordinator' => $coordinator,
                 'schedule' => $schedule,
                 'rooms' => $rooms,
+                'scheduleSlots' => $parsed_schedule_slots,
                 'totalHours' => $total_hours,
                 'compliance' => 100,
                 'absenteeCount' => 0,
@@ -328,6 +625,7 @@ if (isset($_GET['action'])) {
                         'coordinator' => $coordinator,
                         'schedule' => $schedule,
                         'rooms' => $rooms,
+                        'scheduleSlots' => $parsed_schedule_slots,
                         'totalHours' => $total_hours,
                         'compliance' => isset($course['compliance']) ? $course['compliance'] : 100,
                         'absenteeCount' => isset($course['absenteeCount']) ? $course['absenteeCount'] : 0,
@@ -475,7 +773,7 @@ if (isset($_GET['action'])) {
         save_table(REPORTS_FILE, $reports);
 
         add_log(display_name($user) . " generated report: {$title}");
-        trigger_toast("Academic report compiled and added to the archive.");
+        trigger_toast('Academic report generated successfully and added to the archive.');
         header('Location: index.php?page=reports');
         exit;
     }
