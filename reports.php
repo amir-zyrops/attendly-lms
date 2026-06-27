@@ -37,7 +37,7 @@ $blueprints = [
     
     <!-- Hero Reports Title banner -->
     <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-3xl p-5 shadow-sm">
-        <div class="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-slate-850">
+        <div class="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-slate-800">
             <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">Academic Reports Terminal</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Compile real-time PDFs and structured tables logs for compliance registrar audits.</p>
@@ -48,7 +48,7 @@ $blueprints = [
 
     <!-- Blueprints section grid -->
     <div class="space-y-4">
-        <h3 class="font-extrabold text-slate-850 dark:text-slate-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
+        <h3 class="font-extrabold text-slate-800 dark:text-slate-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
             <span class="material-symbols-outlined text-blue-550 text-sm">print</span>
             Available Document Templates
         </h3>
@@ -90,9 +90,9 @@ $blueprints = [
     <!-- Archives history table list -->
     <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
         
-        <div class="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-850 mb-4">
+        <div class="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
             <div>
-                <h3 class="font-bold text-slate-850 dark:text-white text-sm">Archived Generations Log</h3>
+                <h3 class="font-bold text-slate-800 dark:text-white text-sm">Archived Generations Log</h3>
                 <p class="text-xs text-slate-500 font-medium">Download logs of previously generated records.</p>
             </div>
             <span class="material-symbols-outlined text-slate-450">inventory_2</span>
@@ -101,7 +101,7 @@ $blueprints = [
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs border-collapse">
                 <thead>
-                    <tr class="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-850">
+                    <tr class="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-800">
                         <th class="py-2.5 px-3">Report Document File</th>
                         <th class="py-2.5 px-3">File Category</th>
                         <th class="py-2.5 px-3">Compiled By</th>
@@ -117,7 +117,7 @@ $blueprints = [
                     </tr>
                     <?php else: ?>
                     <?php foreach ($reports as $rep): ?>
-                    <tr class="border-b border-slate-50 dark:border-slate-850 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-colors">
+                    <tr class="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-colors">
                         <td class="py-3 px-3">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-blue-600 text-sm">picture_as_pdf</span>
