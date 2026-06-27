@@ -1,15 +1,29 @@
 <?php
 /**
- * Attendly Academic Portal - PHP Version Configuration & Active Database Emulator
- * Uses JSON flat files inside a local data directory for persistent data store.
- * Zero database setups required - works out of the box on any PHP runner!
+ * Attendly Academic Portal - Core Configuration & Database Handler
+ * PostgreSQL backend with JSON fallback for data persistence.
+ * Manages environment variables, database connections, and secure session handling.
  */
 
 require_once __DIR__ . '/vendor/autoload.php';
 
+// Production security configuration
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
+// Security headers
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
 // Start session securely
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    session_start([
+        'cookie_httponly' => true,
+        'cookie_samesite' => 'Strict',
+    ]);
 }
 
 // Data Directory
@@ -474,6 +488,75 @@ function role_icon($role) {
     return isset($icons[$role]) ? $icons[$role] : 'person';
 }
 
+function find_user_by_email($email) {
+    $users = get_table(USERS_FILE);
+    foreach ($users as $user) {
+        if (isset($user['email']) && strtolower(trim($user['email'])) === strtolower(trim($email))) {
+            return $user;
+        }
+    }
+    return null;
+}
+
+function find_student_by_email($email) {
+    $students = get_table(STUDENTS_FILE);
+    foreach ($students as $student) {
+        if (isset($student['email']) && strtolower(trim($student['email'])) === strtolower(trim($email))) {
+            return $student;
+        }
+    }
+    return null;
+}
+
+function save_student_profile($student) {
+    if (!isset($student['rollNo'])) {
+        return;
+    }
+    $students = get_table(STUDENTS_FILE);
+    $found = false;
+    foreach ($students as $index => $existing) {
+        if (isset($existing['rollNo']) && $existing['rollNo'] === $student['rollNo']) {
+            $students[$index] = array_merge($existing, $student);
+            $found = true;
+            break;
+        }
+    }
+    if (!$found) {
+        $students[] = $student;
+    }
+    save_table(STUDENTS_FILE, $students);
+}
+
+function find_student_by_roll_no($rollNo) {
+    $students = get_table(STUDENTS_FILE);
+    foreach ($students as $student) {
+        if (isset($student['rollNo']) && $student['rollNo'] === $rollNo) {
+            return $student;
+        }
+    }
+    return null;
+}
+
+function get_parent_linked_student() {
+    $current = get_current_user_profile();
+    if (!$current || !isset($current['role']) || $current['role'] !== 'parent') {
+        return null;
+    }
+    if (empty($current['linked_student_roll'])) {
+        return null;
+    }
+    return find_student_by_roll_no($current['linked_student_roll']);
+}
+
+function is_profile_complete($profile) {
+    if (!$profile || !is_array($profile)) {
+        return false;
+    }
+    $name = isset($profile['name']) ? trim((string) $profile['name']) : '';
+    $email = isset($profile['email']) ? trim((string) $profile['email']) : '';
+    return $name !== '' && $email !== '';
+}
+
 function display_name($profile) {
     $name = isset($profile['name']) ? trim((string) $profile['name']) : '';
     if ($name !== '') {
@@ -541,7 +624,11 @@ function get_current_user_profile() {
     if (!isset($_SESSION['user'])) return null;
     $users = get_table(USERS_FILE);
     $role = $_SESSION['user']['role'];
-    $profile = isset($users[$role]) ? $users[$role] : $_SESSION['user'];
+    $profile = isset($users[$role]) ? $users[$role] : [];
+    if (!is_array($profile)) {
+        $profile = [];
+    }
+    $profile = array_merge($profile, $_SESSION['user']);
     $profile['role'] = $role;
     return $profile;
 }
