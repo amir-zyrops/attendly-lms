@@ -5,17 +5,29 @@
 require_once __DIR__ . '/config.php';
 
 $users = get_table(USERS_FILE);
+$students = get_table(STUDENTS_FILE);
 $step = isset($_GET['step']) ? $_GET['step'] : 'select';
 $selected_role = isset($_GET['role']) ? $_GET['role'] : '';
 $selected_role = in_array($selected_role, ['admin', 'faculty', 'student', 'parent'], true) ? $selected_role : '';
 $default_email = '';
-if ($selected_role && isset($users[$selected_role]) && !empty($users[$selected_role]['email'])) {
+if ($selected_role === 'student') {
+    foreach ($students as $student) {
+        if (!empty($student['email'])) {
+            $default_email = $student['email'];
+            break;
+        }
+    }
+}
+if ($default_email === '' && $selected_role && isset($users[$selected_role]) && !empty($users[$selected_role]['email'])) {
     $default_email = $users[$selected_role]['email'];
 }
 $otp_email = isset($_SESSION['otp_email']) ? $_SESSION['otp_email'] : $default_email;
+$selected_student_roll = isset($_SESSION['otp_student_roll']) ? $_SESSION['otp_student_roll'] : '';
+$selected_student = $selected_role === 'parent' && $selected_student_roll ? find_student_by_roll_no($selected_student_roll) : null;
 $role_label = $selected_role ? role_display_name($selected_role) : '';
 $show_email_step = $step === 'email' && $selected_role;
 $show_verify_step = $step === 'verify' && $selected_role && isset($_SESSION['otp_code']);
+$parent_has_students = $selected_role === 'parent' && !empty($students);
 ?>
 <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 font-sans">
     <div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-0 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
@@ -32,11 +44,10 @@ $show_verify_step = $step === 'verify' && $selected_role && isset($_SESSION['otp
             </div>
             <div class="mt-12 md:mt-0 space-y-4 relative z-10">
                 <blockquote class="text-xs italic text-indigo-100 leading-relaxed font-medium">
-                    "Secure portal sign-in now verifies access with a one-time password sent to your role email address."
+                    "Secure portal sign-in verifies access with a one-time password sent to your registered email."
                 </blockquote>
-                <div class="pt-4 border-t border-white/10 flex justify-between items-center text-[10px] text-indigo-200 font-mono">
-                    <span>SMTP ENV: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM</span>
-                    <span>Secure Code Expiry: <?php echo (OTP_TTL_SECONDS / 60); ?> min</span>
+                <div class="pt-4 border-t border-white/10 text-[10px] text-indigo-200 font-mono">
+                    <span>Verification Code Expires: <?php echo (OTP_TTL_SECONDS / 60); ?> minutes</span>
                 </div>
             </div>
         </div>
@@ -61,6 +72,13 @@ $show_verify_step = $step === 'verify' && $selected_role && isset($_SESSION['otp
                     </div>
                     <form action="index.php?action=verify_otp" method="POST" class="space-y-5 text-xs">
                         <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
+                        <?php if ($selected_role === 'parent' && $selected_student): ?>
+                            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-[11px] text-slate-600 dark:text-slate-300">
+                                <p class="font-semibold text-slate-900 dark:text-white">Parent portal verification for:</p>
+                                <p><?php echo h(display_name($selected_student)); ?> <span class="font-mono text-slate-500">(<?php echo h($selected_student['rollNo']); ?>)</span></p>
+                                <p class="mt-2 text-[10px] text-slate-500">OTP will be sent to <strong><?php echo h($otp_email); ?></strong>.</p>
+                            </div>
+                        <?php endif; ?>
                         <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">One-Time Password</label>
                         <input
                             type="text"
@@ -72,11 +90,49 @@ $show_verify_step = $step === 'verify' && $selected_role && isset($_SESSION['otp
                             class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none"
                         />
                         <div class="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400">
-                            <span>OTP expires in <?php echo (int) ((($_SESSION['otp_expires'] ?? time()) - time()) / 60) + 1; ?> minutes.</span>
+                            <span>OTP expires in <span id="otp-timer"><?php echo (int) ((($_SESSION['otp_expires'] ?? time()) - time()) / 60) + 1; ?></span> minutes.</span>
                             <a href="index.php?page=login&step=email&role=<?php echo h($selected_role); ?>" class="text-blue-600 hover:underline">Change email</a>
                         </div>
                         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-3 rounded-2xl">Verify and Enter Portal</button>
                     </form>
+                    <form action="index.php?action=resend_otp" method="POST" class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
+                        <button
+                            type="submit"
+                            id="resend-btn"
+                            class="w-full text-slate-500 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-500 font-semibold py-2 px-3 text-xs uppercase tracking-wider transition-colors border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50"
+                        >
+                            Resend Code (expires in <span id="resend-timer"><?php echo (int) ((($_SESSION['otp_expires'] ?? time()) - time()) / 60) + 1; ?></span>m)
+                        </button>
+                    </form>
+                    <script>
+                        const expiresAt = <?php echo ($_SESSION['otp_expires'] ?? time()); ?>;
+                        const resendBtn = document.getElementById('resend-btn');
+                        const resendTimer = document.getElementById('resend-timer');
+                        const timerSpan = document.getElementById('otp-timer');
+
+                        function updateTimer() {
+                            const now = Math.floor(Date.now() / 1000);
+                            const remaining = expiresAt - now;
+
+                            if (remaining <= 0) {
+                                resendBtn.disabled = false;
+                                resendBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-slate-100', 'dark:bg-slate-800', 'text-slate-500', 'dark:text-slate-500', 'hover:text-slate-500', 'dark:hover:text-slate-500');
+                                resendBtn.classList.add('opacity-100', 'cursor-pointer', 'bg-blue-50', 'dark:bg-blue-950/40', 'text-blue-600', 'dark:text-blue-300', 'hover:text-blue-700', 'dark:hover:text-blue-200', 'hover:bg-blue-100', 'dark:hover:bg-blue-950', 'border-blue-300', 'dark:border-blue-700');
+                                resendBtn.innerHTML = 'Resend Code Now';
+                                resendTimer.textContent = '0';
+                                timerSpan.textContent = '0';
+                            } else {
+                                const minutes = Math.floor(remaining / 60);
+                                const seconds = remaining % 60;
+                                resendTimer.textContent = minutes > 0 ? minutes : '0';
+                                timerSpan.textContent = minutes + (seconds > 0 ? '.' + Math.floor(seconds / 10) : '');
+                            }
+                        }
+
+                        updateTimer();
+                        setInterval(updateTimer, 1000);
+                    </script>
                 </div>
 
             <?php elseif ($show_email_step): ?>
@@ -90,21 +146,39 @@ $show_verify_step = $step === 'verify' && $selected_role && isset($_SESSION['otp
                     </div>
                     <form action="index.php?action=request_otp" method="POST" class="space-y-5 text-xs">
                         <input type="hidden" name="role" value="<?php echo h($selected_role); ?>" />
-                        <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Academic Email Address</label>
-                        <input
-                            type="email"
-                            name="email"
-                            required
-                            value="<?php echo h($otp_email); ?>"
-                            placeholder="e.g. you@institution.edu"
-                            class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none"
-                        />
-                        <p class="text-[10px] text-slate-500 dark:text-slate-400">If SMTP environment variables are configured, your code will be sent automatically.</p>
+                        <?php if ($selected_role === 'parent'): ?>
+                            <?php if ($parent_has_students): ?>
+                                <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Select Student Account</label>
+                                <select name="student_roll" required class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none">
+                                    <option value="">Choose linked student</option>
+                                    <?php foreach ($students as $student): ?>
+                                        <?php $roll = isset($student['rollNo']) ? $student['rollNo'] : ''; ?>
+                                        <?php if ($roll === '') continue; ?>
+                                        <option value="<?php echo h($roll); ?>" <?php echo $selected_student_roll === $roll ? 'selected' : ''; ?>>
+                                            <?php echo h(display_name($student)); ?> (<?php echo h($roll); ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400">The chosen student’s registered email will receive the verification code.</p>
+                            <?php else: ?>
+                                <div class="p-5 rounded-3xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
+                                    No student records are available yet. Add a student record first before using the parent portal.
+                                </div>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <label class="block font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">Academic Email Address</label>
+                            <input
+                                type="email"
+                                name="email"
+                                required
+                                value="<?php echo h($otp_email); ?>"
+                                placeholder="e.g. you@institution.edu"
+                                class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none"
+                            />
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400">Your verification code will be sent to your registered email address.</p>
+                        <?php endif; ?>
                         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-3 rounded-2xl">Send Verification Code</button>
                     </form>
-                    <div class="pt-4 text-[10px] text-slate-400 border-t border-slate-200 dark:border-slate-800">
-                        <p>Set SMTP env values in your environment and restart PHP for real email delivery.</p>
-                    </div>
                 </div>
 
             <?php else: ?>
