@@ -40,7 +40,7 @@ $blueprints = [
         <div class="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-slate-800">
             <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">Academic Reports Terminal</h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Compile real-time PDFs and structured tables logs for compliance registrar audits.</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Generate real-time PDFs and structured logs for registrar audits and compliance reviews.</p>
             </div>
             <span class="material-symbols-outlined text-indigo-550 text-2xl select-none">receipt_long</span>
         </div>
@@ -95,7 +95,13 @@ $blueprints = [
                 <h3 class="font-bold text-slate-800 dark:text-white text-sm">Archived Generations Log</h3>
                 <p class="text-xs text-slate-500 font-medium">Download logs of previously generated records.</p>
             </div>
-            <span class="material-symbols-outlined text-slate-450">inventory_2</span>
+            <div class="flex items-center gap-2">
+                <form action="index.php?action=clear_reports" method="POST" onsubmit="return confirm('Clear the archived report generations log?') && confirm('This action cannot be undone. Continue?');">
+                    <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                    <button type="submit" class="text-[10px] font-bold text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/40">Clear Archived Log</button>
+                </form>
+                <span class="material-symbols-outlined text-slate-450">inventory_2</span>
+            </div>
         </div>
 
         <div class="overflow-x-auto">
