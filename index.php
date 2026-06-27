@@ -16,9 +16,11 @@ if (isset($_GET['action'])) {
     if ($action === 'login') {
         $role = isset($_POST['role']) ? $_POST['role'] : 'student';
         $users = get_table(USERS_FILE);
-        if (isset($users[$role])) {
-            $_SESSION['user'] = $users[$role];
-            $_SESSION['user']['role'] = $role; // ensure sync
+        $login_user = isset($users[$role]) ? $users[$role] : null;
+
+        if ($login_user && !empty($login_user['email'])) {
+            $_SESSION['user'] = $login_user;
+            $_SESSION['user']['role'] = $role;
             $label = display_name($_SESSION['user']);
             add_log("{$label} signed in to the " . role_display_name($role) . " portal.");
             trigger_toast("Sign-in successful. Active role: " . role_display_name($role));
@@ -32,10 +34,41 @@ if (isset($_GET['action'])) {
         $email = isset($_POST['email']) ? trim($_POST['email']) : '';
         $users = get_table(USERS_FILE);
 
-        if (!$role || !isset($users[$role]) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            trigger_toast('Please choose a valid portal and email address to receive your OTP.');
-            header('Location: index.php?page=login&step=email&role=' . urlencode($role));
-            exit;
+        if ($role === 'parent') {
+            $student_roll = isset($_POST['student_roll']) ? trim($_POST['student_roll']) : '';
+            $student = find_student_by_roll_no($student_roll);
+            if (!$student || !isset($student['email']) || !filter_var($student['email'], FILTER_VALIDATE_EMAIL)) {
+                trigger_toast('Please select a linked student with a valid email to receive the OTP.');
+                header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+                exit;
+            }
+            $email = trim($student['email']);
+            $_SESSION['otp_student_roll'] = $student_roll;
+        } elseif ($role === 'student') {
+            if ($email === '') {
+                trigger_toast('Please provide a registered student email.');
+                header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+                exit;
+            }
+            $student = find_student_by_email($email);
+            if (!$student) {
+                trigger_toast('No student record found for that email. Please use your registered student email.');
+                header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+                exit;
+            }
+            $role = 'student';
+        } else {
+            if ($email === '') {
+                trigger_toast('Please provide a registered email address.');
+                header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+                exit;
+            }
+            $logged_in = find_user_by_email($email);
+            if (!$logged_in || $logged_in['role'] !== $role) {
+                trigger_toast('Email does not match the selected portal. Choose the correct portal or email.');
+                header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+                exit;
+            }
         }
 
         $_SESSION['otp_role'] = $role;
@@ -46,10 +79,7 @@ if (isset($_GET['action'])) {
         $sent = send_otp_email($email, $_SESSION['otp_code']);
         add_log("OTP generated for {$role} and dispatched to {$email}.");
 
-        $message = $sent
-            ? 'Check your email for the verification code.'
-            : 'OTP generated locally. Configure SMTP environment variables to send email.';
-        trigger_toast($message);
+        trigger_toast('Check your email for the verification code.');
 
         header('Location: index.php?page=login&step=verify&role=' . urlencode($role));
         exit;
@@ -58,6 +88,7 @@ if (isset($_GET['action'])) {
     if ($action === 'verify_otp') {
         $role = isset($_POST['role']) ? $_POST['role'] : '';
         $code = isset($_POST['otp_code']) ? trim($_POST['otp_code']) : '';
+        $email = isset($_SESSION['otp_email']) ? trim($_SESSION['otp_email']) : '';
 
         if (!isset($_SESSION['otp_code'], $_SESSION['otp_expires'], $_SESSION['otp_role']) || time() > $_SESSION['otp_expires']) {
             trigger_toast('OTP is missing or has expired. Please request a new code.');
@@ -72,19 +103,56 @@ if (isset($_GET['action'])) {
         }
 
         $users = get_table(USERS_FILE);
-        if (!isset($users[$role])) {
+        if ($role !== 'student' && !isset($users[$role])) {
             trigger_toast('The selected portal is not available.');
             header('Location: index.php?page=login');
             exit;
         }
 
-        $_SESSION['user'] = $users[$role];
-        $_SESSION['user']['role'] = $role;
-        unset($_SESSION['otp_code'], $_SESSION['otp_expires'], $_SESSION['otp_role'], $_SESSION['otp_email']);
+        if ($role === 'student') {
+            $student = find_student_by_email($email);
+            if (!$student) {
+                trigger_toast('Student record could not be located after verification. Please request a new code.');
+                header('Location: index.php?page=login&step=email&role=' . urlencode($role));
+                exit;
+            }
+            $_SESSION['user'] = array_merge(isset($users['student']) ? $users['student'] : [], $student);
+            $_SESSION['user']['role'] = 'student';
+        } else {
+            $_SESSION['user'] = $users[$role];
+            $_SESSION['user']['role'] = $role;
+            if ($role === 'parent' && isset($_SESSION['otp_student_roll'])) {
+                $_SESSION['user']['linked_student_roll'] = $_SESSION['otp_student_roll'];
+                $_SESSION['user']['linked_student_email'] = $email;
+            }
+        }
+
+        unset($_SESSION['otp_code'], $_SESSION['otp_expires'], $_SESSION['otp_role'], $_SESSION['otp_email'], $_SESSION['otp_student_roll']);
 
         add_log(display_name($_SESSION['user']) . ' authenticated via OTP for ' . role_display_name($role));
         trigger_toast('OTP verified. Welcome to your portal.');
         header('Location: index.php?page=dashboard');
+        exit;
+    }
+
+    if ($action === 'resend_otp') {
+        $role = isset($_POST['role']) ? $_POST['role'] : '';
+
+        if (!isset($_SESSION['otp_email'], $_SESSION['otp_role']) || $role !== $_SESSION['otp_role']) {
+            trigger_toast('Unable to resend OTP. Please start over.');
+            header('Location: index.php?page=login');
+            exit;
+        }
+
+        $email = $_SESSION['otp_email'];
+        $_SESSION['otp_code'] = str_pad((string) rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        $_SESSION['otp_expires'] = time() + OTP_TTL_SECONDS;
+
+        $sent = send_otp_email($email, $_SESSION['otp_code']);
+        add_log("OTP resent for {$role} to {$email}.");
+
+        trigger_toast('Verification code resent to your email.');
+        header('Location: index.php?page=login&step=verify&role=' . urlencode($role));
         exit;
     }
 
@@ -143,6 +211,192 @@ if (isset($_GET['action'])) {
         add_log(display_name($faculty_user) . " submitted an attendance sheet for {$course_code}.");
         trigger_toast("Attendance sheet compiled and locked into registrar log successfully!");
         header('Location: index.php?page=dashboard');
+        exit;
+    }
+
+    // Course management actions for admin / faculty
+    if ($action === 'create_course' || $action === 'update_course' || $action === 'delete_course') {
+        require_login();
+        $role = $_SESSION['user']['role'];
+        if (!in_array($role, ['admin', 'faculty'], true)) {
+            trigger_toast('Course management is restricted to administrative and faculty portals.');
+            header('Location: index.php?page=timetable&sub=courses');
+            exit;
+        }
+
+        $courses = get_table(COURSES_FILE);
+        $students = get_table(STUDENTS_FILE);
+
+        if ($action === 'delete_course') {
+            $course_code = isset($_POST['course_code']) ? trim($_POST['course_code']) : '';
+            if ($course_code === '') {
+                trigger_toast('Course code is required for deletion.');
+                header('Location: index.php?page=timetable&sub=courses');
+                exit;
+            }
+
+            if ($role !== 'admin') {
+                trigger_toast('Only administrators can remove course records.');
+                header('Location: index.php?page=timetable&sub=courses');
+                exit;
+            }
+
+            $deleted = false;
+            foreach ($courses as $index => $course) {
+                if (isset($course['code']) && $course['code'] === $course_code) {
+                    unset($courses[$index]);
+                    $deleted = true;
+                    break;
+                }
+            }
+            if ($deleted) {
+                $courses = array_values($courses);
+                save_table(COURSES_FILE, $courses);
+                add_log(display_name(get_current_user_profile()) . " deleted course {$course_code}.");
+                trigger_toast("Course {$course_code} was removed successfully.");
+            } else {
+                trigger_toast('Unable to delete course. The requested course was not found.');
+            }
+
+            header('Location: index.php?page=timetable&sub=courses');
+            exit;
+        }
+
+        $code = isset($_POST['code']) ? strtoupper(trim($_POST['code'])) : '';
+        $title = isset($_POST['title']) ? trim($_POST['title']) : '';
+        $coordinator = isset($_POST['coordinator']) ? trim($_POST['coordinator']) : '';
+        $schedule = isset($_POST['schedule']) ? trim($_POST['schedule']) : '';
+        $rooms = isset($_POST['rooms']) ? trim($_POST['rooms']) : '';
+        $total_hours = isset($_POST['total_hours']) ? intval($_POST['total_hours']) : 0;
+        $enrolled_students = isset($_POST['enrolled_students']) ? (array) $_POST['enrolled_students'] : [];
+        $original_code = isset($_POST['original_code']) ? strtoupper(trim($_POST['original_code'])) : '';
+
+        if ($code === '' || $title === '') {
+            trigger_toast('Course code and title are required.');
+            header('Location: index.php?page=timetable&sub=courses');
+            exit;
+        }
+
+        if ($action === 'create_course') {
+            foreach ($courses as $course) {
+                if (isset($course['code']) && strtoupper($course['code']) === $code) {
+                    trigger_toast('Course code already exists. Please choose a unique identifier.');
+                    header('Location: index.php?page=timetable&sub=courses');
+                    exit;
+                }
+            }
+            if ($role === 'faculty') {
+                $coordinator = display_name(get_current_user_profile());
+            }
+            $course_status = $role === 'admin' ? 'Approved' : 'Pending Approval';
+            $courses[] = [
+                'code' => $code,
+                'title' => $title,
+                'coordinator' => $coordinator,
+                'schedule' => $schedule,
+                'rooms' => $rooms,
+                'totalHours' => $total_hours,
+                'compliance' => 100,
+                'absenteeCount' => 0,
+                'enrolledStudents' => array_values($enrolled_students),
+                'status' => $course_status,
+                'submittedBy' => display_name(get_current_user_profile()),
+                'submittedRole' => $role,
+            ];
+            add_log(display_name(get_current_user_profile()) . " created course {$code} with status {$course_status}.");
+            trigger_toast("Course {$code} was added successfully.");
+        } else {
+            $updated = false;
+            foreach ($courses as $index => $course) {
+                if (isset($course['code']) && strtoupper($course['code']) === ($original_code ?: $code)) {
+                    if ($role === 'faculty' && isset($course['coordinator']) && $course['coordinator'] !== display_name(get_current_user_profile())) {
+                        trigger_toast('You can only update courses you are coordinating.');
+                        header('Location: index.php?page=timetable&sub=courses');
+                        exit;
+                    }
+                    $new_status = $course['status'] ?? 'Pending Approval';
+                    if ($role === 'faculty') {
+                        $new_status = 'Pending Approval';
+                        $coordinator = display_name(get_current_user_profile());
+                    }
+                    if ($role === 'admin') {
+                        $new_status = $course['status'] ?? 'Approved';
+                    }
+                    $courses[$index] = [
+                        'code' => $code,
+                        'title' => $title,
+                        'coordinator' => $coordinator,
+                        'schedule' => $schedule,
+                        'rooms' => $rooms,
+                        'totalHours' => $total_hours,
+                        'compliance' => isset($course['compliance']) ? $course['compliance'] : 100,
+                        'absenteeCount' => isset($course['absenteeCount']) ? $course['absenteeCount'] : 0,
+                        'enrolledStudents' => array_values($enrolled_students),
+                        'status' => $new_status,
+                        'submittedBy' => display_name(get_current_user_profile()),
+                        'submittedRole' => $role,
+                    ];
+                    $updated = true;
+                    break;
+                }
+            }
+            if (!$updated) {
+                trigger_toast('Unable to find the course to update.');
+                header('Location: index.php?page=timetable&sub=courses');
+                exit;
+            }
+            add_log(display_name(get_current_user_profile()) . " updated course {$code}.");
+            trigger_toast("Course {$code} has been updated.");
+        }
+
+        save_table(COURSES_FILE, $courses);
+
+        foreach ($students as $index => $student) {
+            $students[$index]['enrolledSections'] = isset($student['enrolledSections']) && is_array($student['enrolledSections']) ? $student['enrolledSections'] : [];
+            if (in_array($student['rollNo'], $enrolled_students, true)) {
+                if (!in_array($code, $students[$index]['enrolledSections'], true)) {
+                    $students[$index]['enrolledSections'][] = $code;
+                }
+            } else {
+                $students[$index]['enrolledSections'] = array_values(array_filter($students[$index]['enrolledSections'], function ($course_code) use ($code) {
+                    return $course_code !== $code;
+                }));
+            }
+
+            if ($original_code && $original_code !== $code) {
+                $students[$index]['enrolledSections'] = array_values(array_map(function ($course_code) use ($original_code, $code) {
+                    return $course_code === $original_code ? $code : $course_code;
+                }, $students[$index]['enrolledSections']));
+            }
+        }
+        save_table(STUDENTS_FILE, $students);
+
+        header('Location: index.php?page=timetable&sub=courses');
+        exit;
+    }
+
+    if ($action === 'approve_course') {
+        require_login();
+        $role = $_SESSION['user']['role'];
+        if ($role !== 'admin') {
+            trigger_toast('Only administrators can approve course proposals.');
+            header('Location: index.php?page=timetable&sub=courses');
+            exit;
+        }
+
+        $course_code = isset($_POST['course_code']) ? trim($_POST['course_code']) : '';
+        foreach ($courses as $index => $course) {
+            if (isset($course['code']) && $course['code'] === $course_code) {
+                $courses[$index]['status'] = 'Approved';
+                $courses[$index]['approvedBy'] = display_name(get_current_user_profile());
+                $courses[$index]['approvedAt'] = date('Y-m-d H:i:s');
+                save_table(COURSES_FILE, $courses);
+                add_log(display_name(get_current_user_profile()) . " approved course proposal {$course_code}.");
+                trigger_toast("Course {$course_code} has been approved.");
+                break;
+            }
+        }
+        header('Location: index.php?page=timetable&sub=courses');
         exit;
     }
 
@@ -231,13 +485,21 @@ if (isset($_GET['action'])) {
         require_login();
         $users = get_table(USERS_FILE);
         $role = $_SESSION['user']['role'];
+
+        $profile_name = isset($_POST['name']) ? trim($_POST['name']) : '';
+        $profile_email = isset($_POST['email']) ? trim($_POST['email']) : '';
+        if ($profile_name === '' || $profile_email === '') {
+            trigger_toast('Please complete your name and email before continuing.');
+            header('Location: index.php?page=settings&sub=profile');
+            exit;
+        }
         
         if (isset($users[$role])) {
-            $users[$role]['name'] = isset($_POST['name']) ? $_POST['name'] : $users[$role]['name'];
-            $users[$role]['email'] = isset($_POST['email']) ? $_POST['email'] : $users[$role]['email'];
-            $users[$role]['designation'] = isset($_POST['designation']) ? $_POST['designation'] : $users[$role]['designation'];
-            $users[$role]['department'] = isset($_POST['department']) ? $_POST['department'] : $users[$role]['department'];
-            $users[$role]['bio'] = isset($_POST['bio']) ? $_POST['bio'] : $users[$role]['bio'];
+            $users[$role]['name'] = $profile_name;
+            $users[$role]['email'] = $profile_email;
+            $users[$role]['designation'] = isset($_POST['designation']) ? trim($_POST['designation']) : $users[$role]['designation'];
+            $users[$role]['department'] = isset($_POST['department']) ? trim($_POST['department']) : $users[$role]['department'];
+            $users[$role]['bio'] = isset($_POST['bio']) ? trim($_POST['bio']) : $users[$role]['bio'];
             
             save_table(USERS_FILE, $users);
             // Refresh session
@@ -247,8 +509,17 @@ if (isset($_GET['action'])) {
             add_log(display_name($users[$role]) . " updated profile details.");
             trigger_toast("Academic session registration records modified successfully!");
         }
-        header('Location: index.php?page=settings');
-        exit;
+
+        if ($role === 'student' && isset($_SESSION['user']['rollNo'])) {
+            save_student_profile([ 
+                'rollNo' => $_SESSION['user']['rollNo'],
+                'name' => $profile_name,
+                'email' => $profile_email,
+                'department' => isset($_POST['department']) ? trim($_POST['department']) : '',
+                'designation' => isset($_POST['designation']) ? trim($_POST['designation']) : '',
+                'bio' => isset($_POST['bio']) ? trim($_POST['bio']) : '',
+            ]);
+        }
     }
 
     // Toggle Preferences / Dark Mode
@@ -279,6 +550,14 @@ if ($page !== 'login') {
 }
 
 $current_user = get_current_user_profile();
+if ($current_user && !is_profile_complete($current_user)) {
+    $needs_profile_page = $page === 'settings' && isset($_GET['sub']) && $_GET['sub'] === 'profile';
+    if (!$needs_profile_page) {
+        trigger_toast('Complete your profile before continuing.');
+        header('Location: index.php?page=settings&sub=profile');
+        exit;
+    }
+}
 $is_dark = isset($_SESSION['dark_theme']) && $_SESSION['dark_theme'] == true;
 $toast_msg = pull_toast();
 
@@ -388,7 +667,7 @@ $toast_msg = pull_toast();
                             $nav_items[] = ['id' => 'attendance', 'label' => $current_user['role'] === 'faculty' ? 'Class Sheets' : 'Audits Team', 'icon' => 'fact_check'];
                         }
                         
-                        $nav_items[] = ['id' => 'timetable', 'label' => 'Weekly Schedule', 'icon' => 'calendar_month'];
+                        $nav_items[] = ['id' => 'timetable', 'label' => $current_user['role'] === 'faculty' ? 'Faculty Schedule' : ($current_user['role'] === 'admin' ? 'Registrar Schedule' : 'Weekly Schedule'), 'icon' => 'calendar_month'];
                         
                         // Timetable leaf has a sub-tab in routing
                         $nav_items[] = ['id' => 'leave', 'label' => 'Leave Requests', 'icon' => 'pending_actions'];
