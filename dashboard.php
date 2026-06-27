@@ -63,7 +63,7 @@ if ($role === 'admin'):
         <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
             <div class="flex justify-between items-center text-slate-400">
                 <span class="text-xs font-bold uppercase tracking-wider">Active Lectures</span>
-                <span class="material-symbols-outlined text-royal-500 text-xl">auto_stories</span>
+                <span class="material-symbols-outlined text-indigo-500 text-xl">auto_stories</span>
             </div>
             <div class="flex items-baseline gap-2">
                 <span class="text-3xl font-black tracking-tight text-slate-900 dark:text-white"><?php echo $total_courses; ?></span>
@@ -103,7 +103,7 @@ if ($role === 'admin'):
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
-                            <tr class="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-850">
+                            <tr class="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-800">
                                 <th class="py-2.5 px-3">Student Name</th>
                                 <th class="py-2.5 px-3">Roll ID</th>
                                 <th class="py-2.5 px-3">Compliance Meter</th>
@@ -129,7 +129,7 @@ if ($role === 'admin'):
                                     $badge_color = 'text-amber-700 bg-amber-50 dark:bg-amber-950/40';
                                 }
                             ?>
-                            <tr class="border-b border-slate-50 dark:border-slate-850 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-colors">
+                            <tr class="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-colors">
                                 <td class="py-3 px-3">
                                     <div class="flex items-center gap-2.5">
                                         <?php echo avatar_markup($st, 'w-7 h-7 rounded-full border'); ?>
@@ -183,12 +183,12 @@ if ($role === 'admin'):
             <!-- Scrollable Stream logs -->
             <div class="space-y-3.5 max-h-[340px] overflow-y-auto pr-1">
                 <?php if (empty($logs)): ?>
-                <div class="p-6 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-850 text-center">
+                <div class="p-6 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
                     <p class="text-xs text-slate-400 italic">No activity has been recorded yet.</p>
                 </div>
                 <?php else: ?>
                 <?php foreach ($logs as $lg): ?>
-                <div class="p-3 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-850 space-y-1">
+                <div class="p-3 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
                     <div class="flex justify-between items-center">
                         <span class="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">EVENT LOG</span>
                         <span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
@@ -253,7 +253,7 @@ elseif ($role === 'faculty'):
                         <span class="material-symbols-outlined text-slate-350 select-none">book_2</span>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4 text-xs font-medium text-slate-500 border-t border-b border-slate-50 dark:border-slate-850 py-3">
+                    <div class="grid grid-cols-2 gap-4 text-xs font-medium text-slate-500 border-t border-b border-slate-50 dark:border-slate-800 py-3">
                         <div class="space-y-1.5">
                             <span class="text-[10px] text-slate-400 uppercase tracking-wide block">Schedule Slot</span>
                             <span class="text-slate-800 dark:text-slate-300 font-bold"><?php echo htmlspecialchars($co['schedule']); ?></span>
@@ -266,18 +266,26 @@ elseif ($role === 'faculty'):
 
                     <div class="flex justify-between items-center pt-2">
                         <div class="text-xs text-slate-450 flex items-center gap-3">
-                            <span>Students Registered: <strong class="text-slate-805 dark:text-white font-extrabold"><?php echo $co['studentCount']; ?></strong></span>
+                            <span>Students Registered: <strong class="text-slate-805 dark:text-white font-extrabold"><?php echo isset($co['enrolledStudents']) && is_array($co['enrolledStudents']) ? count($co['enrolledStudents']) : 0; ?></strong></span>
                             <span class="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
                             <span>Compliance: <strong class="text-slate-805 dark:text-white font-extrabold"><?php echo $co['compliance']; ?>%</strong></span>
                         </div>
-                        
-                        <a 
-                            href="index.php?page=attendance&course=<?php echo urlencode($co['code']); ?>"
-                            class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-md shadow-blue-550/15 cursor-pointer flex items-center gap-1.5"
-                        >
-                            <span class="material-symbols-outlined text-sm">how_to_reg</span>
-                            Mark Sheet
-                        </a>
+                        <div class="flex flex-wrap gap-2">
+                            <a 
+                                href="index.php?page=attendance&course=<?php echo urlencode($co['code']); ?>"
+                                class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-md shadow-blue-550/15 cursor-pointer flex items-center gap-1.5"
+                            >
+                                <span class="material-symbols-outlined text-sm">how_to_reg</span>
+                                Mark Sheet
+                            </a>
+                            <a 
+                                href="index.php?page=timetable&sub=courses&edit=<?php echo urlencode($co['code']); ?>"
+                                class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-xl shadow-sm cursor-pointer flex items-center gap-1.5"
+                            >
+                                <span class="material-symbols-outlined text-sm">edit</span>
+                                Course Registry
+                            </a>
+                        </div>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -316,7 +324,7 @@ elseif ($role === 'faculty'):
                             </div>
                         </div>
 
-                        <div class="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-850 space-y-1 text-xs">
+                        <div class="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1 text-xs">
                             <div class="flex justify-between text-[10px] text-slate-450 font-semibold mb-1">
                                 <span>TYPE: <?php echo strtoupper(htmlspecialchars($lv['type'])); ?></span>
                                 <span class="font-mono"><?php echo $lv['date']; ?></span>
@@ -353,21 +361,29 @@ elseif ($role === 'faculty'):
 // SECTION 3: STUDENT & PARENT PORTALS
 // ------------------------------------------------------------------------
 else: // Student/Parent
-    // Link to the first available student record until formal account mapping is configured.
     $student_obj = null;
-    foreach ($students as $st) {
-        if (isset($st['rollNo']) && $st['rollNo'] !== '') {
-            $student_obj = $st;
-            break;
+    if ($role === 'parent') {
+        $student_obj = get_parent_linked_student();
+    }
+
+    if (!$student_obj) {
+        // Fallback for student portal or any unlinked parent session.
+        foreach ($students as $st) {
+            if (isset($st['rollNo']) && $st['rollNo'] !== '') {
+                $student_obj = $st;
+                break;
+            }
         }
     }
-    if (!$student_obj && !empty($students)) {
-        $student_obj = reset($students);
-    }
+
     if (!$student_obj):
 ?>
 <div class="space-y-6 animate-fade-in">
-    <?php empty_state('No student profile linked', 'Add a student record before using the student or parent dashboard.', 'person_search'); ?>
+    <?php if ($role === 'parent'): ?>
+        <?php empty_state('No linked student selected', 'Use the parent portal login to select a student record before accessing guardian view.', 'supervisor_account'); ?>
+    <?php else: ?>
+        <?php empty_state('No student profile linked', 'Add a student record before using the student dashboard.', 'person_search'); ?>
+    <?php endif; ?>
 </div>
 <?php
         return;
@@ -380,10 +396,10 @@ else: // Student/Parent
     <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <?php if ($role === 'parent'): ?>
-                <h1 class="text-xl font-bold text-slate-905 dark:text-white">Sponsor View: <?php echo h(display_name($current_user)); ?></h1>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-white">Sponsor View: <?php echo h(display_name($current_user)); ?></h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Reviewing linked academic records: <strong><?php echo h(display_name($student_obj)); ?> (<?php echo h(display_field(isset($student_obj['rollNo']) ? $student_obj['rollNo'] : '', 'No roll ID')); ?>)</strong>.</p>
             <?php else: ?>
-                <h1 class="text-xl font-bold text-slate-905 dark:text-white">Active Student Workspace: <?php echo h(display_name($current_user)); ?></h1>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-white">Active Student Workspace: <?php echo h(display_name($current_user)); ?></h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Department: <?php echo h(display_field(isset($current_user['department']) ? $current_user['department'] : '')); ?>. Registered student enrollment log.</p>
             <?php endif; ?>
         </div>
@@ -399,7 +415,7 @@ else: // Student/Parent
         <!-- Attendance Ring display (Col 4) -->
         <div class="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between items-center text-center space-y-6">
             <div class="w-full text-left">
-                <h3 class="font-extrabold text-slate-850 dark:text-white text-xs uppercase tracking-wider">Overall Academic Compliance</h3>
+                <h3 class="font-extrabold text-slate-800 dark:text-white text-xs uppercase tracking-wider">Overall Academic Compliance</h3>
             </div>
 
             <!-- CSS SVG Circle Meter -->
@@ -426,7 +442,7 @@ else: // Student/Parent
         <div class="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-5">
             <div class="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div>
-                    <h3 class="font-bold text-slate-850 dark:text-white text-sm">Course Attendance Breakdowns</h3>
+                    <h3 class="font-bold text-slate-800 dark:text-white text-sm">Course Attendance Breakdowns</h3>
                     <p class="text-xs text-slate-500 font-medium">Lecture sheets tracking matrix for linked registration sections.</p>
                 </div>
                 <span class="material-symbols-outlined text-slate-400">equalizer</span>
@@ -472,7 +488,7 @@ else: // Student/Parent
                 endforeach;
                 if ($rendered_sections === 0):
                 ?>
-                <div class="p-6 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-850 text-center">
+                <div class="p-6 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
                     <p class="text-xs text-slate-400 italic">No course registrations are linked to this student yet.</p>
                 </div>
                 <?php endif; ?>
