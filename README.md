@@ -18,7 +18,7 @@ Attendly is a PHP-based academic attendance portal for managing role-based acces
 
 - PHP 8.0 or newer (with PDO and PostgreSQL driver extensions)
 - PostgreSQL 12 or newer
-- Modern web browser with JavaScript enabled
+- A modern web browser with JavaScript enabled
 - Valid SMTP credentials for email OTP delivery
 
 ## Installation
