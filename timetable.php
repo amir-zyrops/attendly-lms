@@ -92,11 +92,11 @@ function get_enrolled_count($course) {
                     <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="flex justify-between items-center text-xs">
                             <span class="font-extrabold text-blue-700 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded font-mono uppercase"><?php echo h(display_field(isset($course['code']) ? $course['code'] : '', 'Course')); ?></span>
-                            <span class="text-slate-400 font-mono text-[10px]"><?php echo h(display_field(isset($course['schedule']) ? $course['schedule'] : '', 'Schedule pending')); ?></span>
+                            <span class="text-slate-400 font-mono text-[10px]"><?php echo h(display_field(summarize_schedule_slots($course), 'Schedule pending')); ?></span>
                         </div>
                         <div class="space-y-1">
                             <h4 class="font-extrabold text-slate-900 dark:text-white text-sm"><?php echo h(display_field(isset($course['title']) ? $course['title'] : '', 'Untitled course')); ?></h4>
-                            <p class="text-slate-500 text-[11px] font-medium">Assigned: <?php echo h(display_field(isset($course['rooms']) ? $course['rooms'] : '', 'Not configured')); ?></p>
+                            <p class="text-slate-500 text-[11px] font-medium">Assigned: <?php echo h(display_field(summarize_room_slots($course), 'Not configured')); ?></p>
                         </div>
                         <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-50 dark:border-slate-800 text-[10px] text-slate-450">
                             <span><?php echo h(display_field(isset($course['coordinator']) ? $course['coordinator'] : '', 'Coordinator pending')); ?></span>
@@ -141,12 +141,12 @@ function get_enrolled_count($course) {
                                             <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-1 rounded-lg"><?php echo h($course['code']); ?></span>
                                             <h4 class="text-slate-900 dark:text-white font-bold mt-3"><?php echo h($course['title']); ?></h4>
                                         </div>
-                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500"><?php echo h($course['schedule']); ?></span>
+                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500"><?php echo h(summarize_schedule_slots($course)); ?></span>
                                     </div>
 
                                     <div class="grid grid-cols-2 gap-4 text-[11px] text-slate-500">
                                         <div>Coordinator: <strong class="text-slate-700 dark:text-slate-200"><?php echo h($course['coordinator']); ?></strong></div>
-                                        <div>Room: <strong class="text-slate-700 dark:text-slate-200"><?php echo h($course['rooms']); ?></strong></div>
+                                        <div>Room: <strong class="text-slate-700 dark:text-slate-200"><?php echo h(summarize_room_slots($course)); ?></strong></div>
                                         <div>Hours: <strong class="text-slate-700 dark:text-slate-200"><?php echo h($course['totalHours']); ?></strong></div>
                                         <div>Enrolled: <strong class="text-slate-700 dark:text-slate-200"><?php echo get_enrolled_count($course); ?></strong></div>
                                     </div>
@@ -206,20 +206,110 @@ function get_enrolled_count($course) {
                                 <?php endif; ?>
                             </div>
                             <div class="space-y-1.5">
-                                <label class="block font-bold text-slate-605">Schedule Slot</label>
-                                <input type="text" name="schedule" value="<?php echo h($editing_course['schedule'] ?? ''); ?>" placeholder="Mon 09:00 - 10:30" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div class="space-y-1.5">
-                                <label class="block font-bold text-slate-605">Room / Hall</label>
-                                <input type="text" name="rooms" value="<?php echo h($editing_course['rooms'] ?? ''); ?>" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
-                            </div>
-                            <div class="space-y-1.5">
                                 <label class="block font-bold text-slate-605">Total Lecture Hours</label>
                                 <input type="number" min="0" name="total_hours" value="<?php echo h($editing_course['totalHours'] ?? ''); ?>" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
                             </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <label class="block font-bold text-slate-605">Class Schedule Slots</label>
+                                <button type="button" id="add-schedule-slot" class="text-[10px] font-bold text-indigo-700 hover:underline">+ Add slot</button>
+                            </div>
+                            <div id="schedule-slot-list" class="space-y-2">
+                                <?php $schedule_slots = get_schedule_slot_rows($editing_course); ?>
+                                <?php if (empty($schedule_slots)): ?>
+                                    <?php $schedule_slots = [['day' => '', 'start' => '', 'end' => '', 'room' => '']]; ?>
+                                <?php endif; ?>
+                                <?php foreach ($schedule_slots as $slot): ?>
+                                    <div class="schedule-slot-row grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2">
+                                        <select name="schedule_slots[][day]" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                                            <option value="" <?php echo (($slot['day'] ?? '') === '' ? 'selected' : ''); ?>>Day</option>
+                                            <option value="Mon" <?php echo (($slot['day'] ?? '') === 'Mon' ? 'selected' : ''); ?>>Monday</option>
+                                            <option value="Tue" <?php echo (($slot['day'] ?? '') === 'Tue' ? 'selected' : ''); ?>>Tuesday</option>
+                                            <option value="Wed" <?php echo (($slot['day'] ?? '') === 'Wed' ? 'selected' : ''); ?>>Wednesday</option>
+                                            <option value="Thu" <?php echo (($slot['day'] ?? '') === 'Thu' ? 'selected' : ''); ?>>Thursday</option>
+                                            <option value="Fri" <?php echo (($slot['day'] ?? '') === 'Fri' ? 'selected' : ''); ?>>Friday</option>
+                                            <option value="Sat" <?php echo (($slot['day'] ?? '') === 'Sat' ? 'selected' : ''); ?>>Saturday</option>
+                                            <option value="Sun" <?php echo (($slot['day'] ?? '') === 'Sun' ? 'selected' : ''); ?>>Sunday</option>
+                                        </select>
+                                        <select name="schedule_slots[][start]" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                                            <option value="" <?php echo (($slot['start'] ?? '') === '' ? 'selected' : ''); ?>>Start</option>
+                                            <?php for ($hour = 7; $hour <= 20; $hour++): ?>
+                                                <?php foreach (["00", "30"] as $min): ?>
+                                                    <?php $value = sprintf('%02d:%s', $hour, $min); ?>
+                                                    <option value="<?php echo h($value); ?>" <?php echo (($slot['start'] ?? '') === $value ? 'selected' : ''); ?>><?php echo h($value); ?></option>
+                                                <?php endforeach; ?>
+                                            <?php endfor; ?>
+                                        </select>
+                                        <select name="schedule_slots[][end]" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                                            <option value="" <?php echo (($slot['end'] ?? '') === '' ? 'selected' : ''); ?>>End</option>
+                                            <?php for ($hour = 7; $hour <= 20; $hour++): ?>
+                                                <?php foreach (["00", "30"] as $min): ?>
+                                                    <?php $value = sprintf('%02d:%s', $hour, $min); ?>
+                                                    <option value="<?php echo h($value); ?>" <?php echo (($slot['end'] ?? '') === $value ? 'selected' : ''); ?>><?php echo h($value); ?></option>
+                                                <?php endforeach; ?>
+                                            <?php endfor; ?>
+                                        </select>
+                                        <input type="text" name="schedule_slots[][room]" value="<?php echo h($slot['room'] ?? ''); ?>" placeholder="Hall / Room" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                                        <button type="button" class="remove-schedule-slot text-[10px] font-bold text-red-700 hover:underline">Remove</button>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <template id="schedule-slot-template">
+                                <div class="schedule-slot-row grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2">
+                                    <select name="schedule_slots[][day]" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                                        <option value="">Day</option>
+                                        <option value="Mon">Monday</option>
+                                        <option value="Tue">Tuesday</option>
+                                        <option value="Wed">Wednesday</option>
+                                        <option value="Thu">Thursday</option>
+                                        <option value="Fri">Friday</option>
+                                        <option value="Sat">Saturday</option>
+                                        <option value="Sun">Sunday</option>
+                                    </select>
+                                    <select name="schedule_slots[][start]" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                                        <option value="">Start</option>
+                                        <?php for ($hour = 7; $hour <= 20; $hour++): ?>
+                                            <?php foreach (["00", "30"] as $min): ?>
+                                                <?php $value = sprintf('%02d:%s', $hour, $min); ?>
+                                                <option value="<?php echo h($value); ?>"><?php echo h($value); ?></option>
+                                            <?php endforeach; ?>
+                                        <?php endfor; ?>
+                                    </select>
+                                    <select name="schedule_slots[][end]" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                                        <option value="">End</option>
+                                        <?php for ($hour = 7; $hour <= 20; $hour++): ?>
+                                            <?php foreach (["00", "30"] as $min): ?>
+                                                <?php $value = sprintf('%02d:%s', $hour, $min); ?>
+                                                <option value="<?php echo h($value); ?>"><?php echo h($value); ?></option>
+                                            <?php endforeach; ?>
+                                        <?php endfor; ?>
+                                    </select>
+                                    <input type="text" name="schedule_slots[][room]" placeholder="Hall / Room" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                                    <button type="button" class="remove-schedule-slot text-[10px] font-bold text-red-700 hover:underline">Remove</button>
+                                </div>
+                            </template>
+                            <script>
+                                const scheduleSlotList = document.getElementById('schedule-slot-list');
+                                const addScheduleSlotButton = document.getElementById('add-schedule-slot');
+                                const scheduleSlotTemplate = document.getElementById('schedule-slot-template');
+                                if (scheduleSlotList && addScheduleSlotButton && scheduleSlotTemplate) {
+                                    addScheduleSlotButton.addEventListener('click', function () {
+                                        const clone = scheduleSlotTemplate.content.firstElementChild.cloneNode(true);
+                                        scheduleSlotList.appendChild(clone);
+                                    });
+                                    scheduleSlotList.addEventListener('click', function (event) {
+                                        const removeButton = event.target.closest('.remove-schedule-slot');
+                                        if (removeButton) {
+                                            const row = removeButton.closest('.schedule-slot-row');
+                                            if (row) {
+                                                row.remove();
+                                            }
+                                        }
+                                    });
+                                }
+                            </script>
                         </div>
 
                         <div class="space-y-1.5">
