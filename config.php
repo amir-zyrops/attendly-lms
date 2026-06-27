@@ -5,6 +5,8 @@
  * Zero database setups required - works out of the box on any PHP runner!
  */
 
+require_once __DIR__ . '/vendor/autoload.php';
+
 // Start session securely
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -407,20 +409,32 @@ function is_smtp_configured() {
 }
 
 function send_otp_email($to, $otp) {
-    $subject = 'Attendly OTP Verification';
-    $message = "Your Attendly login code is: {$otp}\n\nThis code expires in " . (OTP_TTL_SECONDS / 60) . " minutes.\n";
-    $headers = 'From: ' . SMTP_FROM . "\r\n";
-    $headers .= 'Content-Type: text/plain; charset=UTF-8\r\n';
-
-    if (is_smtp_configured()) {
-        if (SMTP_HOST !== '') {
-            @ini_set('SMTP', SMTP_HOST);
-            @ini_set('smtp_port', SMTP_PORT);
-        }
-        return mail($to, $subject, $message, $headers);
+    if (!is_smtp_configured()) {
+        return false;
     }
 
-    return false;
+    $subject = 'Attendly OTP Verification';
+    $message = "Your Attendly login code is: {$otp}\n\nThis code expires in " . (OTP_TTL_SECONDS / 60) . " minutes.\n";
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->Port = (int) SMTP_PORT;
+        $mail->SMTPAuth = true;
+        $mail->Username = SMTP_USER;
+        $mail->Password = SMTP_PASS;
+        $mail->SMTPSecure = (strtolower((string) SMTP_PORT) === '465') ? 'ssl' : 'tls';
+        $mail->setFrom(SMTP_FROM);
+        $mail->addAddress($to);
+        $mail->Subject = $subject;
+        $mail->Body = $message;
+        $mail->AltBody = $message;
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        return false;
+    }
 }
 
 function h($value) {
