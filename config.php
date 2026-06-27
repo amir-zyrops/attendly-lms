@@ -20,10 +20,15 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 
 // Start session securely
 if (session_status() === PHP_SESSION_NONE) {
-    session_start([
-        'cookie_httponly' => true,
-        'cookie_samesite' => 'Strict',
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'domain' => '',
+        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Strict',
     ]);
+    session_start();
 }
 
 // Data Directory
@@ -77,6 +82,93 @@ function env($name, $default = '') {
         return $_SERVER[$name];
     }
     return $default;
+}
+
+function is_truthy($value) {
+    $value = strtolower(trim((string) $value));
+    return in_array($value, ['1', 'true', 'yes', 'on'], true);
+}
+
+function get_client_ip() {
+    $keys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];
+    foreach ($keys as $key) {
+        if (!empty($_SERVER[$key])) {
+            $value = trim((string) $_SERVER[$key]);
+            if ($value !== '') {
+                $parts = explode(',', $value);
+                return trim($parts[0]);
+            }
+        }
+    }
+    return 'unknown';
+}
+
+function get_security_setting($name, $default = '') {
+    $value = env($name, $default);
+    return $value === false ? $default : $value;
+}
+
+function is_public_registration_allowed() {
+    return is_truthy(get_security_setting('ALLOW_PUBLIC_REGISTRATION', 'false'));
+}
+
+function is_email_domain_allowed($email) {
+    $allowed = trim((string) get_security_setting('ALLOWED_EMAIL_DOMAINS', ''));
+    if ($allowed === '') {
+        return true;
+    }
+
+    $email = strtolower(trim((string) $email));
+    $domains = array_filter(array_map('trim', explode(',', $allowed)), function ($domain) {
+        return $domain !== '';
+    });
+
+    foreach ($domains as $domain) {
+        $domain = strtolower(ltrim($domain, '.'));
+        if ($domain === '') {
+            continue;
+        }
+        if ($email === $domain || str_ends_with($email, '@' . $domain) || str_ends_with($email, '.' . $domain)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function get_csrf_token() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function verify_csrf_token($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], (string) $token);
+}
+
+function rate_limit_check($key, $limit = 5, $window = 300) {
+    $file = DATA_DIR . '/rate_limits.json';
+    $data = [];
+    if (file_exists($file)) {
+        $decoded = json_decode(file_get_contents($file), true);
+        $data = is_array($decoded) ? $decoded : [];
+    }
+
+    $now = time();
+    $bucket = isset($data[$key]) && is_array($data[$key]) ? $data[$key] : [];
+    $bucket = array_values(array_filter($bucket, function ($timestamp) use ($now, $window) {
+        return (int) $timestamp > $now - $window;
+    }));
+
+    if (count($bucket) >= $limit) {
+        return false;
+    }
+
+    $bucket[] = $now;
+    $data[$key] = $bucket;
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    return true;
 }
 
 // SMTP Environment Configuration (optional runtime email transport)
@@ -418,6 +510,27 @@ function save_table($filename, $data) {
     file_put_contents($filename, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 }
 
+function reset_student_parent_data() {
+    $users = get_table(USERS_FILE);
+    foreach (['student', 'parent'] as $role) {
+        $users[$role] = [
+            'name' => '',
+            'email' => '',
+            'role' => $role,
+            'avatar' => '',
+            'designation' => '',
+            'department' => '',
+            'bio' => ''
+        ];
+    }
+    save_table(USERS_FILE, $users);
+
+    save_table(STUDENTS_FILE, []);
+    save_table(LEAVES_FILE, []);
+
+    return true;
+}
+
 function is_smtp_configured() {
     return SMTP_HOST !== '' && SMTP_USER !== '' && SMTP_PASS !== '' && SMTP_FROM !== '';
 }
@@ -570,6 +683,93 @@ function display_name($profile) {
 function display_field($value, $fallback = 'Not configured') {
     $value = trim((string) $value);
     return $value !== '' ? $value : $fallback;
+}
+
+function get_schedule_slot_rows($course) {
+    if (!is_array($course)) {
+        return [];
+    }
+
+    if (isset($course['scheduleSlots']) && is_array($course['scheduleSlots'])) {
+        $slots = [];
+        foreach ($course['scheduleSlots'] as $slot) {
+            if (!is_array($slot)) {
+                continue;
+            }
+            $day = isset($slot['day']) ? trim((string) $slot['day']) : '';
+            $start = isset($slot['start']) ? trim((string) $slot['start']) : '';
+            $end = isset($slot['end']) ? trim((string) $slot['end']) : '';
+            $room = isset($slot['room']) ? trim((string) $slot['room']) : '';
+            if ($day === '' && $start === '' && $end === '' && $room === '') {
+                continue;
+            }
+            $slots[] = [
+                'day' => $day,
+                'start' => $start,
+                'end' => $end,
+                'room' => $room,
+            ];
+        }
+        return $slots;
+    }
+
+    $legacy_schedule = isset($course['schedule']) ? trim((string) $course['schedule']) : '';
+    $legacy_room = isset($course['rooms']) ? trim((string) $course['rooms']) : '';
+    if ($legacy_schedule !== '' || $legacy_room !== '') {
+        return [[
+            'day' => '',
+            'start' => '',
+            'end' => '',
+            'room' => $legacy_room,
+        ]];
+    }
+
+    return [];
+}
+
+function summarize_schedule_slots($course) {
+    $slots = get_schedule_slot_rows($course);
+    if (empty($slots)) {
+        return 'Schedule pending';
+    }
+
+    $parts = [];
+    foreach ($slots as $slot) {
+        $day = $slot['day'] ?? '';
+        $start = $slot['start'] ?? '';
+        $end = $slot['end'] ?? '';
+        $time = trim($start . ($start !== '' && $end !== '' ? ' - ' : '') . $end);
+
+        $entry = $day;
+        if ($time !== '') {
+            $entry .= ' ' . $time;
+        }
+        if (($slot['room'] ?? '') !== '') {
+            $entry .= ' @ ' . $slot['room'];
+        }
+
+        if ($entry !== '') {
+            $parts[] = $entry;
+        }
+    }
+
+    return empty($parts) ? 'Schedule pending' : implode(' | ', $parts);
+}
+
+function summarize_room_slots($course) {
+    $slots = get_schedule_slot_rows($course);
+    $rooms = [];
+    foreach ($slots as $slot) {
+        if (($slot['room'] ?? '') !== '') {
+            $rooms[] = $slot['room'];
+        }
+    }
+
+    if (empty($rooms)) {
+        return 'Not configured';
+    }
+
+    return implode(', ', array_values(array_unique($rooms)));
 }
 
 function initials_for($name) {
