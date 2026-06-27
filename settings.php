@@ -22,16 +22,16 @@ $dark_theme = isset($_SESSION['dark_theme']) ? $_SESSION['dark_theme'] : false;
             </div>
 
             <!-- Tabs Switcher -->
-            <div class="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-850 select-none">
+            <div class="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 select-none">
                 <a
                     href="index.php?page=settings&sub=profile"
-                    class="py-1.5 px-4 rounded-lg text-xs font-bold text-center transition-all <?php echo $active_settings === 'profile' ? 'bg-slate-905 text-white dark:bg-slate-800' : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'; ?>"
+                    class="py-1.5 px-4 rounded-lg text-xs font-bold text-center transition-all <?php echo $active_settings === 'profile' ? 'bg-slate-900 text-white dark:bg-slate-800' : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'; ?>"
                 >
                     Profile Settings
                 </a>
                 <a
                     href="index.php?page=settings&sub=preferences"
-                    class="py-1.5 px-4 rounded-lg text-xs font-bold text-center transition-all <?php echo $active_settings === 'preferences' ? 'bg-slate-905 text-white dark:bg-slate-800' : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'; ?>"
+                    class="py-1.5 px-4 rounded-lg text-xs font-bold text-center transition-all <?php echo $active_settings === 'preferences' ? 'bg-slate-900 text-white dark:bg-slate-800' : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'; ?>"
                 >
                     System Preferences
                 </a>
@@ -45,7 +45,7 @@ $dark_theme = isset($_SESSION['dark_theme']) ? $_SESSION['dark_theme'] : false;
             <form action="index.php?action=update_profile" method="POST" class="space-y-6">
                 
                 <!-- Avatar block info -->
-                <div class="pb-3 border-b border-slate-100 dark:border-slate-850 flex items-center gap-4">
+                <div class="pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4">
                     <?php echo avatar_markup($current_user, 'w-16 h-16 rounded-full border-2 border-indigo-550 shadow-md'); ?>
                     <div>
                         <h3 class="font-extrabold text-slate-900 dark:text-white text-base leading-tight"><?php echo h(display_name($current_user)); ?></h3>
@@ -130,7 +130,7 @@ $dark_theme = isset($_SESSION['dark_theme']) ? $_SESSION['dark_theme'] : false;
     <?php else: ?>
         <!-- Render Toggles view inside System Preferences -->
         <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
-            <div class="pb-2 border-b border-slate-50 dark:border-slate-850">
+            <div class="pb-2 border-b border-slate-50 dark:border-slate-800">
                 <h3 class="font-bold text-slate-855 dark:text-white text-sm">System Operations Preferences</h3>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Configure how notifications and style components load inside this browser canvas workspace.</p>
             </div>
@@ -138,7 +138,7 @@ $dark_theme = isset($_SESSION['dark_theme']) ? $_SESSION['dark_theme'] : false;
             <div class="space-y-4 font-sans text-xs">
                 
                 <!-- Toggle Push Alerts -->
-                <div class="flex justify-between items-center py-2.5 border-b border-slate-50 dark:border-slate-850">
+                <div class="flex justify-between items-center py-2.5 border-b border-slate-50 dark:border-slate-800">
                     <div>
                         <h4 class="font-extrabold text-slate-800 dark:text-slate-100">Portal Push Notifications</h4>
                         <p class="text-[11px] text-slate-450 mt-0.5">Toggle live visual alerts when leave applications or marksheets shift state.</p>
@@ -152,7 +152,7 @@ $dark_theme = isset($_SESSION['dark_theme']) ? $_SESSION['dark_theme'] : false;
                 </div>
 
                 <!-- Toggle Email alerts -->
-                <div class="flex justify-between items-center py-2.5 border-b border-slate-50 dark:border-slate-850">
+                <div class="flex justify-between items-center py-2.5 border-b border-slate-50 dark:border-slate-800">
                     <div>
                         <h4 class="font-extrabold text-slate-800 dark:text-slate-100">Analytical Daily Email Rollup</h4>
                         <p class="text-[11px] text-slate-450 mt-0.5">Deliver daily summaries and compliance statistics reports directly to the linked coordinator mailboxes.</p>
