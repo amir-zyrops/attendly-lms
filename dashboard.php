@@ -6,10 +6,13 @@
 require_once __DIR__ . '/config.php';
 
 $role = $current_user['role'];
+$users = get_table(USERS_FILE);
 $students = get_table(STUDENTS_FILE);
 $courses = get_table(COURSES_FILE);
 $leaves = get_table(LEAVES_FILE);
 $logs = get_table(LOGS_FILE);
+$faculty_profile = isset($users['faculty']) && is_array($users['faculty']) ? $users['faculty'] : null;
+$student_profile = isset($users['student']) && is_array($users['student']) ? $users['student'] : null;
 
 // Calculate global metrics
 $total_students = count($students);
@@ -42,6 +45,97 @@ if ($role === 'admin'):
         <span class="text-[10px] font-mono bg-blue-600/30 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-md uppercase font-bold tracking-wider">
             Secure Node: #<?php echo mt_rand(450, 499); ?>
         </span>
+    </div>
+
+    <div class="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/80 dark:bg-amber-950/20 p-4 space-y-3">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">Administrator Controls</h3>
+                <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Manage staff and student records, and clear student and parent data when needed.</p>
+            </div>
+            <span class="material-symbols-outlined text-amber-600 text-lg">warning</span>
+        </div>
+        <form action="index.php?action=flush_database" method="POST" onsubmit="return confirm('This will erase all student and parent data. Continue?') && confirm('This action cannot be undone. Are you absolutely sure?');">
+            <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+            <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-extrabold py-2.5 rounded-2xl">Clear Student & Parent Data</button>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">Faculty Registry</h3>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Create or remove the faculty account used for the faculty portal.</p>
+                </div>
+                <span class="material-symbols-outlined text-indigo-500">school</span>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-950/70 p-3 text-xs text-slate-600 dark:text-slate-300">
+                <div class="font-semibold">Current faculty account</div>
+                <div class="mt-1">Name: <span class="font-bold text-slate-900 dark:text-white"><?php echo h(display_name($faculty_profile)); ?></span></div>
+                <div>Email: <span class="font-bold text-slate-900 dark:text-white"><?php echo h(isset($faculty_profile['email']) ? $faculty_profile['email'] : 'Not configured'); ?></span></div>
+            </div>
+            <form action="index.php?action=manage_account" method="POST" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                <input type="hidden" name="account_target" value="faculty" />
+                <input type="hidden" name="account_action" value="create" />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input type="text" name="name" placeholder="Faculty name" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                    <input type="email" name="email" placeholder="Faculty email" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                    <input type="text" name="designation" placeholder="Designation" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                    <input type="text" name="department" placeholder="Department" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                </div>
+                <textarea name="bio" rows="2" placeholder="Short bio" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none"></textarea>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-2.5 rounded-2xl">Save Faculty Account</button>
+            </form>
+            <form action="index.php?action=manage_account" method="POST" onsubmit="return confirm('Remove the current faculty account?');">
+                <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                <input type="hidden" name="account_target" value="faculty" />
+                <input type="hidden" name="account_action" value="delete" />
+                <button type="submit" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-extrabold py-2.5 rounded-2xl">Remove Faculty Account</button>
+            </form>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">Student Registry</h3>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Create or remove the student account and linked student record.</p>
+                </div>
+                <span class="material-symbols-outlined text-emerald-500">badge</span>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-950/70 p-3 text-xs text-slate-600 dark:text-slate-300">
+                <div class="font-semibold">Current student account</div>
+                <div class="mt-1">Name: <span class="font-bold text-slate-900 dark:text-white"><?php echo h(display_name($student_profile)); ?></span></div>
+                <div>Email: <span class="font-bold text-slate-900 dark:text-white"><?php echo h(isset($student_profile['email']) ? $student_profile['email'] : 'Not configured'); ?></span></div>
+            </div>
+            <form action="index.php?action=manage_account" method="POST" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                <input type="hidden" name="account_target" value="student" />
+                <input type="hidden" name="account_action" value="create" />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input type="text" name="name" placeholder="Student name" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                    <input type="email" name="email" placeholder="Student email" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                    <input type="text" name="roll_no" placeholder="Roll number" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                    <input type="text" name="department" placeholder="Department" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none" />
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 rounded-2xl">Save Student Account</button>
+            </form>
+            <form action="index.php?action=manage_account" method="POST" class="space-y-3" onsubmit="return confirm('Remove the selected student record?');">
+                <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                <input type="hidden" name="account_target" value="student" />
+                <input type="hidden" name="account_action" value="delete" />
+                <select name="roll_no" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-none">
+                    <option value="">Remove all student records</option>
+                    <?php foreach ($students as $student): ?>
+                        <?php if (isset($student['rollNo']) && $student['rollNo'] !== ''): ?>
+                            <option value="<?php echo h($student['rollNo']); ?>"><?php echo h($student['rollNo'] . ' - ' . ($student['name'] ?? '')); ?></option>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-extrabold py-2.5 rounded-2xl">Remove Student Record</button>
+            </form>
+        </div>
     </div>
 
     <!-- Metrics Cards Grid -->
@@ -177,7 +271,13 @@ if ($role === 'admin'):
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-sm">System Logs</h3>
                     <p class="text-[11px] text-slate-450 mt-0.5">Real-time ledger audit trails</p>
                 </div>
-                <span class="material-symbols-outlined text-amber-500 text-base">dns</span>
+                <div class="flex items-center gap-2">
+                    <form action="index.php?action=clear_logs" method="POST" onsubmit="return confirm('Clear the system activity log?') && confirm('This action cannot be undone. Continue?');">
+                        <input type="hidden" name="csrf_token" value="<?php echo h(get_csrf_token()); ?>" />
+                        <button type="submit" class="text-[10px] font-bold text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/40">Clear Logs</button>
+                    </form>
+                    <span class="material-symbols-outlined text-amber-500 text-base">dns</span>
+                </div>
             </div>
 
             <!-- Scrollable Stream logs -->
@@ -256,11 +356,11 @@ elseif ($role === 'faculty'):
                     <div class="grid grid-cols-2 gap-4 text-xs font-medium text-slate-500 border-t border-b border-slate-50 dark:border-slate-800 py-3">
                         <div class="space-y-1.5">
                             <span class="text-[10px] text-slate-400 uppercase tracking-wide block">Schedule Slot</span>
-                            <span class="text-slate-800 dark:text-slate-300 font-bold"><?php echo htmlspecialchars($co['schedule']); ?></span>
+                            <span class="text-slate-800 dark:text-slate-300 font-bold"><?php echo htmlspecialchars(summarize_schedule_slots($co)); ?></span>
                         </div>
                         <div class="space-y-1.5">
                             <span class="text-[10px] text-slate-400 uppercase tracking-wide block">Assigned Hall</span>
-                            <span class="text-slate-800 dark:text-slate-300 font-bold"><?php echo htmlspecialchars($co['rooms']); ?></span>
+                            <span class="text-slate-800 dark:text-slate-300 font-bold"><?php echo htmlspecialchars(summarize_room_slots($co)); ?></span>
                         </div>
                     </div>
 
